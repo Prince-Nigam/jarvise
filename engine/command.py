@@ -20,15 +20,15 @@ def takecommand():
 
     r = sr.Recognizer()
 
-    try:
-      with sr.Microphone() as source:
+    with sr.Microphone() as source:
         print('listening....')
         eel.DisplayMessage('listening....')
         r.pause_threshold = 1
         r.adjust_for_ambient_noise(source, 1)
         
         audio = r.listen(source, timeout=10, phrase_time_limit=6)
-
+        
+    try:
         print('recognizing')
         eel.DisplayMessage('recognizing....')
         query = r.recognize_google(audio, language='en-in')
