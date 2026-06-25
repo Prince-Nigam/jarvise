@@ -14,6 +14,11 @@ class SmokeTests(unittest.TestCase):
         self.assertTrue(callable(command.speak))
         self.assertTrue(callable(features.playAssistantSound))
 
+    def test_safe_call_missing_eel_function(self):
+        import main
+
+        self.assertFalse(main.safe_call_js_function('missing_function'))
+
 
 if __name__ == "__main__":
     unittest.main()

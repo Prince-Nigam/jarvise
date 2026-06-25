@@ -3,7 +3,7 @@ $(document).ready(function () {
     function safeExpose(name, fn) {
         if (typeof eel !== 'undefined') {
             try {
-                eel.expose(fn);
+                eel.expose(fn, name);
             } catch (err) {
                 console.log('Expose skipped:', err);
             }
