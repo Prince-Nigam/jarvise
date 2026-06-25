@@ -1,72 +1,113 @@
-import pyttsx3
-import speech_recognition as sr
-import eel
 import time
-import speech_recognition as sr
+
+try:
+    import pyttsx3
+except ModuleNotFoundError:
+    pyttsx3 = None
+
+try:
+    import speech_recognition as sr
+except ModuleNotFoundError:
+    sr = None
+
+try:
+    import eel
+except ModuleNotFoundError:
+    eel = None
+
+
+def _eel_call(name, *args):
+    if eel is None:
+        return
+    fn = getattr(eel, name, None)
+    if fn is not None:
+        fn(*args)
+
 
 def speak(text):
     text = str(text)
-    engine = pyttsx3.init('sapi5')
-    voices = engine.getProperty('voices') 
-    engine.setProperty('voice', voices[0].id)
-    engine.setProperty('rate', 174)
-    eel.DisplayMessage(text)
+    if pyttsx3 is None:
+        print(text)
+        return
+
+    engine = pyttsx3.init("sapi5")
+    voices = engine.getProperty("voices")
+    if voices:
+        engine.setProperty("voice", voices[0].id)
+    engine.setProperty("rate", 174)
+    _eel_call("DisplayMessage", text)
     engine.say(text)
-    eel.receiverText(text)
+    _eel_call("receiverText", text)
     engine.runAndWait()
 
 
 def takecommand():
+    if sr is None:
+        return ""
 
     r = sr.Recognizer()
 
-    with sr.Microphone() as source:
-        print('listening....')
-        eel.DisplayMessage('listening....')
-        r.pause_threshold = 1
-        r.adjust_for_ambient_noise(source, 1)
-        
-        audio = r.listen(source, timeout=10, phrase_time_limit=6)
-        
     try:
-        print('recognizing')
-        eel.DisplayMessage('recognizing....')
-        query = r.recognize_google(audio, language='en-in')
+        with sr.Microphone() as source:
+            print("listening....")
+            _eel_call("DisplayMessage", "listening....")
+            r.pause_threshold = 1
+            r.adjust_for_ambient_noise(source, 1)
+            audio = r.listen(source, timeout=10, phrase_time_limit=6)
+    except Exception as exc:
+        print(f"Microphone error: {exc}")
+        return ""
+
+    try:
+        print("recognizing")
+        _eel_call("DisplayMessage", "recognizing....")
+        query = r.recognize_google(audio, language="en-in")
         print(f"user said: {query}")
         speak(query)
-        eel.DisplayMessage(query)
+        _eel_call("DisplayMessage", query)
         time.sleep(2)
         return query.lower()
-       
-    except Exception as e:
-        print(f"Recognition Error: {e}")
+    except Exception as exc:
+        print(f"Recognition Error: {exc}")
         return ""
-    
-    
 
 
-@eel.expose
+if eel is not None:
+    expose = eel.expose
+else:
+    def expose(func):
+        return func
+
+
+@expose
 def allCommands(message=1):
     if message == 1:
         query = takecommand()
         if query == "":
-            eel.senderText("Didn't catch that. Try again.")
-            eel.ShowHood()
+            _eel_call("senderText", "Didn't catch that. Try again.")
+            _eel_call("ShowHood")
             return
-        eel.senderText(query)
+        _eel_call("senderText", query)
     else:
         query = message
-        eel.senderText(query)
+        _eel_call("senderText", query)
 
     try:
         if "open" in query:
             from engine.features import openCommand
+
             openCommand(query)
         elif "on youtube" in query:
             from engine.features import PlayYoutube
+
             PlayYoutube(query)
-        elif "send message" in query or "phone call" in query or "video call" in query:
-            from engine.features import findContact, whatsApp, makeCall, sendMessage
+        elif (
+            "send message" in query
+            or "phone call" in query
+            or "video call" in query
+        ):
+            from engine.features import findContact, makeCall, sendMessage, whatsApp
+
             contact_no, name = findContact(query)
             if contact_no != 0:
                 speak("Which mode you want to use, WhatsApp or mobile?")
@@ -75,29 +116,29 @@ def allCommands(message=1):
                 if "mobile" in preferance:
                     if "send message" in query or "send sms" in query:
                         speak("What message to send?")
-                        message = takecommand()
-                        sendMessage(message, contact_no, name)
+                        msg = takecommand()
+                        sendMessage(msg, contact_no, name)
                     elif "phone call" in query:
                         makeCall(name, contact_no)
                     else:
                         speak("Please try again")
                 elif "whatsapp" in preferance:
-                    message = ""
+                    msg = ""
                     if "send message" in query:
-                        message = 'message'
+                        msg = "message"
                         speak("What message to send?")
                         query = takecommand()
                     elif "phone call" in query:
-                        message = 'call'
+                        msg = "call"
                     else:
-                        message = 'video call'
+                        msg = "video call"
 
-                    whatsApp(contact_no, query, message, name)
+                    whatsApp(contact_no, query, msg, name)
         else:
             from engine.features import chatBot
+
             chatBot(query)
+    except Exception as exc:
+        print(f"Error: {exc}")
 
-    except Exception as e:
-        print(f"Error: {e}")
-
-    eel.ShowHood()
+    _eel_call("ShowHood")

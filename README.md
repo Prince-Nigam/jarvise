@@ -49,3 +49,25 @@ From launching apps to making calls and chatting, Jarvis brings AI and automatio
 ```bash
 git clone https://github.com/yourusername/jarvis-python-assistant.git
 cd jarvis-python-assistant
+```
+
+### 2. Create and activate a virtual environment
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+### 3. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Run the assistant
+
+```bash
+python run.py
+```
+
+> If some hardware features such as hotword detection, speech recognition, or face auth are unavailable, the app will still import and start in a limited mode rather than crashing.

@@ -1,108 +1,159 @@
 import os
-from urllib.parse import quote
-import re
 import sqlite3
 import struct
 import subprocess
 import time
 import webbrowser
-from playsound import playsound
-import eel
-import pyaudio
-import pyautogui
+from urllib.parse import quote
+
+try:
+    from playsound import playsound
+except ModuleNotFoundError:
+    playsound = None
+
+try:
+    import eel
+except ModuleNotFoundError:
+    eel = None
+
+try:
+    import pyaudio
+except ModuleNotFoundError:
+    pyaudio = None
+
+try:
+    import pyautogui
+except ModuleNotFoundError:
+    pyautogui = None
+
+try:
+    import pywhatkit as kit
+except ModuleNotFoundError:
+    kit = None
+
+try:
+    import pvporcupine
+except ModuleNotFoundError:
+    pvporcupine = None
+
+try:
+    from hugchat import hugchat
+except ModuleNotFoundError:
+    hugchat = None
+
 from engine.command import speak
 from engine.config import ASSISTANT_NAME
-# Playing assistant sound function
-import pywhatkit as kit
-import pvporcupine
-
 from engine.helper import extract_yt_term, remove_words
-from hugchat import hugchat
+from engine.init_db import DB_PATH, init_database
 
-con = sqlite3.connect("jarvis.db")
+init_database()
+con = sqlite3.connect(DB_PATH)
 cursor = con.cursor()
 
-@eel.expose
-def playAssistantSound():
-    music_dir = "www\\assets\\audio\\start_sound.mp3"
-    playsound(music_dir)
+START_SOUND = os.path.join("www", "assets", "audio", "start_sound.mp3")
 
-    
+
+def playAssistantSound():
+    if playsound is None:
+        print("playsound is not installed; skipping assistant sound")
+        return
+    if not os.path.exists(START_SOUND):
+        print("Startup sound file not found; skipping")
+        return
+    try:
+        playsound(START_SOUND)
+    except Exception as exc:
+        print(f"Startup sound skipped: {exc}")
+
+
+if eel is not None:
+    eel.expose(playAssistantSound)
+
+
 def openCommand(query):
     query = query.replace(ASSISTANT_NAME, "")
     query = query.replace("open", "")
-    query.lower()
+    query = query.lower().strip()
+    app_name = query
 
-    app_name = query.strip()
+    if not app_name:
+        return
 
-    if app_name != "":
+    try:
+        cursor.execute(
+            "SELECT path FROM sys_command WHERE name IN (?)", (app_name,)
+        )
+        results = cursor.fetchall()
 
-        try:
-            cursor.execute(
-                'SELECT path FROM sys_command WHERE name IN (?)', (app_name,))
-            results = cursor.fetchall()
+        if results:
+            speak("Opening " + app_name)
+            os.startfile(results[0][0])
+            return
 
-            if len(results) != 0:
-                speak("Opening "+query)
-                os.startfile(results[0][0])
+        cursor.execute(
+            "SELECT url FROM web_command WHERE name IN (?)", (app_name,)
+        )
+        results = cursor.fetchall()
 
-            elif len(results) == 0: 
-                cursor.execute(
-                'SELECT url FROM web_command WHERE name IN (?)', (app_name,))
-                results = cursor.fetchall()
-                
-                if len(results) != 0:
-                    speak("Opening "+query)
-                    webbrowser.open(results[0][0])
+        if results:
+            speak("Opening " + app_name)
+            webbrowser.open(results[0][0])
+            return
 
-                else:
-                    speak("Opening "+query)
-                    try:
-                        os.system('start '+query)
-                    except:
-                        speak("not found")
-        except:
-            speak("some thing went wrong")
+        speak("Opening " + app_name)
+        os.system("start " + app_name)
+    except Exception:
+        speak("Something went wrong")
 
-       
 
 def PlayYoutube(query):
+    if kit is None:
+        speak("YouTube feature is not available")
+        return
+
     search_term = extract_yt_term(query)
-    speak("Playing "+search_term+" on YouTube")
+    if not search_term:
+        speak("Please tell me what to play on YouTube")
+        return
+
+    speak("Playing " + search_term + " on YouTube")
     kit.playonyt(search_term)
 
 
 def hotword():
-    porcupine=None
-    paud=None
-    audio_stream=None
+    porcupine = None
+    paud = None
+    audio_stream = None
+    if pvporcupine is None or pyaudio is None:
+        print("Hotword dependencies are missing; skipping hotword listener")
+        return
+
     try:
-       
-        # pre trained keywords    
-        porcupine=pvporcupine.create(keywords=["jarvis","alexa"]) 
-        paud=pyaudio.PyAudio()
-        audio_stream=paud.open(rate=porcupine.sample_rate,channels=1,format=pyaudio.paInt16,input=True,frames_per_buffer=porcupine.frame_length)
-        
-        # loop for streaming
+        porcupine = pvporcupine.create(keywords=["jarvis", "alexa"])
+        paud = pyaudio.PyAudio()
+        audio_stream = paud.open(
+            rate=porcupine.sample_rate,
+            channels=1,
+            format=pyaudio.paInt16,
+            input=True,
+            frames_per_buffer=porcupine.frame_length,
+        )
+
         while True:
-            keyword=audio_stream.read(porcupine.frame_length)
-            keyword=struct.unpack_from("h"*porcupine.frame_length,keyword)
+            keyword = audio_stream.read(porcupine.frame_length)
+            keyword = struct.unpack_from("h" * porcupine.frame_length, keyword)
+            keyword_index = porcupine.process(keyword)
 
-            # processing keyword comes from mic 
-            keyword_index=porcupine.process(keyword)
-
-            # checking first keyword detetcted for not
-            if keyword_index>=0:
+            if keyword_index >= 0:
                 print("hotword detected")
-
-                # pressing shortcut key win+j
-                import pyautogui as autogui
-                autogui.keyDown("win")
-                autogui.press("j")
-                time.sleep(2)
-                autogui.keyUp("win")
-                
-    except:
+                if pyautogui is not None:
+                    pyautogui.keyDown("win")
+                    pyautogui.press("j")
+                    time.sleep(2)
+                    pyautogui.keyUp("win")
+    except Exception as exc:
+        print(f"Hotword listener stopped: {exc}")
+    finally:
         if porcupine is not None:
             porcupine.delete()
         if audio_stream is not None:
@@ -111,127 +162,135 @@ def hotword():
             paud.terminate()
 
 
-
-# find contacts
 def findContact(query):
-    
-    words_to_remove = [ASSISTANT_NAME, 'make', 'a', 'to', 'phone', 'call', 'send', 'message', 'whatsapp', 'video']
+    words_to_remove = [
+        ASSISTANT_NAME,
+        "make",
+        "a",
+        "to",
+        "phone",
+        "call",
+        "send",
+        "message",
+        "whatsapp",
+        "video",
+    ]
     query = remove_words(query, words_to_remove)
 
     try:
         query = query.strip().lower()
-        cursor.execute("SELECT mobile_no FROM contacts WHERE LOWER(name) LIKE ? OR LOWER(name) LIKE ?", ('%' + query + '%', query + '%'))
+        cursor.execute(
+            "SELECT mobile_no FROM contacts WHERE LOWER(name) LIKE ? OR LOWER(name) LIKE ?",
+            ("%" + query + "%", query + "%"),
+        )
         results = cursor.fetchall()
-        print(results[0][0])
         mobile_number_str = str(results[0][0])
 
-        if not mobile_number_str.startswith('+91'):
-            mobile_number_str = '+91' + mobile_number_str
+        if not mobile_number_str.startswith("+91"):
+            mobile_number_str = "+91" + mobile_number_str
 
         return mobile_number_str, query
-    except:
-        speak('not exist in contacts')
+    except Exception:
+        speak("Contact not found")
         return 0, 0
-    
+
+
 def whatsApp(mobile_no, message, flag, name):
-    
-
-    if flag == 'message':
+    if flag == "message":
         target_tab = 12
-        jarvis_message = "message send successfully to "+name
-
-    elif flag == 'call':
+        jarvis_message = "Message sent successfully to " + name
+    elif flag == "call":
         target_tab = 7
-        message = ''
-        jarvis_message = "calling to "+name
-
+        message = ""
+        jarvis_message = "Calling " + name
     else:
         target_tab = 6
-        message = ''
-        jarvis_message = "staring video call with "+name
+        message = ""
+        jarvis_message = "Starting video call with " + name
 
-
-    # Encode the message for URL
     encoded_message = quote(message)
-    print(encoded_message)
-    # Construct the URL
     whatsapp_url = f"whatsapp://send?phone={mobile_no}&text={encoded_message}"
-
-    # Construct the full command
-    full_command = f'open "" "{whatsapp_url}"'
-
-    # Open WhatsApp with the constructed URL using cmd.exe
+    full_command = f'cmd /c start "" "{whatsapp_url}"'
     subprocess.run(full_command, shell=True)
+
+    if pyautogui is None:
+        speak(jarvis_message)
+        return
+
     time.sleep(5)
-    subprocess.run(full_command, shell=True)
-    
-    pyautogui.hotkey('ctrl', 'f')
+    pyautogui.hotkey("ctrl", "f")
 
-    for i in range(1, target_tab):
-        pyautogui.hotkey('tab')
+    for _ in range(1, target_tab):
+        pyautogui.press("tab")
 
-    pyautogui.hotkey('enter')
+    pyautogui.press("enter")
     speak(jarvis_message)
 
-# chat bot 
-def chatBot(query):
-    user_input = query.lower()
-    chatbot = hugchat.ChatBot(cookie_path="engine\cookies.json")
-    id = chatbot.new_conversation()
-    chatbot.change_conversation(id)
-    response =  chatbot.chat(user_input)
-    print(response)
-    speak(response)
-    return response
 
-# android automation
+def _simple_chat_fallback(query):
+    from datetime import datetime
+
+    text = query.lower()
+    if "time" in text:
+        return f"The time is {datetime.now().strftime('%I:%M %p')}"
+    if "date" in text:
+        return f"Today is {datetime.now().strftime('%B %d, %Y')}"
+    if "hello" in text or "hi" in text:
+        return "Hello Sir, how can I help you?"
+    return f"I heard: {query}. Configure HugChat cookies for full chat support."
+
+
+def chatBot(query):
+    cookie_path = os.path.join(os.path.dirname(__file__), "cookies.json")
+
+    if hugchat is None or not os.path.exists(cookie_path):
+        response = _simple_chat_fallback(query)
+        speak(response)
+        return response
+
+    try:
+        user_input = query.lower()
+        chatbot = hugchat.ChatBot(cookie_path=cookie_path)
+        conversation_id = chatbot.new_conversation()
+        chatbot.change_conversation(conversation_id)
+        response = chatbot.chat(user_input)
+        speak(response)
+        return response
+    except Exception as exc:
+        print(f"Chat error: {exc}")
+        response = _simple_chat_fallback(query)
+        speak(response)
+        return response
+
 
 def makeCall(name, mobileNo):
-    mobileNo =mobileNo.replace(" ", "")
-    speak("Calling "+name)
-    command = 'adb shell am start -a android.intent.action.CALL -d tel:'+mobileNo
-    os.system(command)
+    mobileNo = mobileNo.replace(" ", "")
+    speak("Calling " + name)
+    os.system(
+        "adb shell am start -a android.intent.action.CALL -d tel:" + mobileNo
+    )
 
 
-# to send message
 def sendMessage(message, mobileNo, name):
-    from engine.helper import replace_spaces_with_percent_s, goback, keyEvent, tapEvents, adbInput
+    from engine.helper import (
+        adbInput,
+        goback,
+        keyEvent,
+        replace_spaces_with_percent_s,
+        tapEvents,
+    )
+
     message = replace_spaces_with_percent_s(message)
     mobileNo = replace_spaces_with_percent_s(mobileNo)
-    speak("sending message")
+    speak("Sending message")
     goback(4)
     time.sleep(1)
     keyEvent(3)
-    # open sms app
     tapEvents(136, 2220)
-    #start chat
     tapEvents(819, 2192)
-    # search mobile no
     adbInput(mobileNo)
-    #tap on name
     tapEvents(601, 574)
-    # tap on input
     tapEvents(390, 2270)
-    #message
     adbInput(message)
-    #send
     tapEvents(957, 1397)
-    speak("message send successfully to "+name)
-
-def whatsApp(mobile_no, message, flag, name):
-    if flag == 'message':
-        jarvis_message = "Message sent successfully to " + name
-    elif flag == 'call':
-        jarvis_message = "Calling " + name + " (manual action needed in browser)"
-    else:
-        jarvis_message = "Starting video call with " + name + " (manual action needed in browser)"
-
-    # Remove '+' for wa.me links
-    mobile_no = mobile_no.replace('+', '').replace(' ', '')
-    encoded_message = quote(message)
-
-    # Open WhatsApp Web link
-    whatsapp_url = f"https://www.whatsapp.com/{mobile_no}?text={encoded_message}"
-    webbrowser.open(whatsapp_url)
-
-    speak(jarvis_message)
+    speak("Message sent successfully to " + name)

@@ -1,0 +1,15 @@
+eel
+pyttsx3
+SpeechRecognition
+playsound==1.2.2
+pyautogui
+pywhatkit
+pvporcupine
+hugchat
+opencv-python
+numpy
+Pillow
+bottle
+bottle-websocket
+gevent
+gevent-websocket

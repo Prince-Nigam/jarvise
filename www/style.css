@@ -5,6 +5,50 @@ body{
     overflow-x: hidden;
 }
 
+.hero-panel {
+    height: 80vh;
+}
+
+.hero-panel-full {
+    height: 100vh;
+}
+
+.canvas-visual {
+    position: absolute;
+}
+
+.svg-anim {
+    --i: 0;
+}
+
+.svg-anim-0 { --i: 0; }
+.svg-anim-1 { --i: 1; }
+.svg-anim-2 { --i: 2; }
+.svg-anim-3 { --i: 3; }
+.svg-anim-4 { --i: 4; }
+.svg-anim-5 { --i: 5; }
+
+.face-animation {
+    width: 300px;
+    height: 300px;
+}
+
+.hero-message {
+    font-size: 28px;
+}
+
+.hero-panel {
+    height: 80vh;
+}
+
+.hero-panel-full {
+    height: 100vh;
+}
+
+.canvas-visual {
+    position: absolute;
+}
+
 .square{
     position: relative;
     width: 400px;
